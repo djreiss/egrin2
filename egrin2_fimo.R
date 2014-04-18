@@ -19,9 +19,9 @@ do.fimo <- function(f1) {
     writeLines( paste( paste(">", names(e$genome.info$genome.seqs), sep=""),
                       e$genome.info$genome.seqs, sep="\n"), con=seqs.file )
     
-    inds <- c( seq( 1, e$k.clust, by=20 ), e$k.clust ) ## fimo can't handle more than about 100 motifs!!??
+    inds <- c( seq( 1, e$k.clust, by=20 ), e$k.clust+1 ) ## fimo can't handle more than about 100 motifs!!??
     for ( i in 1:( length( inds ) - 1 ) ) {
-        mots.file <- e$all.motifs.to.meme.file(ks=inds[i]:inds[i+1], e.val=Inf, resid=Inf)
+        mots.file <- e$all.motifs.to.meme.file(ks=inds[i]:(inds[i+1]-1), e.val=Inf, resid=Inf)
         system( sprintf('rpl bic_ %s_ %s', f1a, mots.file) )
         if ( i == 1 && ( file.exists( out.file ) || file.exists( sprintf( "%s.bz2", out.file ) ) ) ) {
             print( "SKIPPING" ); return() }
@@ -34,7 +34,7 @@ do.fimo <- function(f1) {
     ## Need to remove the headers that are inside the output file, other than the first one
     tfile <- e$my.tempfile('fimo_tmp', tmpdir=sprintf('./%s/fimo_out', output.dir))
     system( sprintf( 'head -1 %s >%s', out.file, tfile ) )
-    system( sprintf( 'grep -v Motif %s >>%s', out.file, tfile ) )
+    system( sprintf( 'grep -v Motif %s | sort -u >>%s', out.file, tfile ) )
     system( sprintf( 'mv -fv %s %s', tfile, out.file ) )
     system( sprintf( 'bzip2 -vf %s', out.file ) )
 }    

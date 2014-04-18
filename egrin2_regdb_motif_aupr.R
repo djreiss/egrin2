@@ -113,7 +113,7 @@ mot.networks <- mclapply( 1:length(rdatas), function(f1) {
 }, mc.preschedule=F )
 names( mot.networks ) <- rdatas
 
-if ( TRUE ) {
+if ( FALSE ) {
 ## merge all prediction sets into a single weighted network
 ## for fun, let's compute AUPR stats after we add each network
 ## mot.networks <- list()

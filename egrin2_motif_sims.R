@@ -52,7 +52,7 @@ do.motif.sims <- function(f1) {
     }, mc.preschedule=F )
 }
 
-for ( i in 1:length(rdatas) ) {
+for ( f1 in 1:length(rdatas) ) {
     f1 <- rdatas[f1]
     do.motif.sims(f1)
 }
