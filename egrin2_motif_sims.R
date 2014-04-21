@@ -12,6 +12,7 @@ do.motif.sims <- function(f1) {
     load( sprintf('%s/%s_motif_shadows.RData', output.dir, f1a) )
     m1 <- m; rm( m )
         
+    i <- which(rdatas == f1)
     f1 <- gsub( '.RData', '', basename(f1) )
     mclapply( i:length(rdatas), function(j) { ## allow self-self comparisons.
         f2 <- rdatas[j]    
@@ -28,6 +29,7 @@ do.motif.sims <- function(f1) {
             m11 <- m1[[ii]]
             for ( jj in 1:length(m2) ) {
                 m22 <- m2[[jj]]
+                if ( f1 == f2 && names(m1)[ii] == names(m2)[jj] ) next ## same motif - will be zero
                 if ( length(m11) != length(m22) ) { print( "WARNING: WRONG LENGTH!" ) } ## length should be # of chroms
                 sum1 <- 0; sum2 <- 0; sum3 <- 0
                 for ( iii in 1:length(m11) ) {

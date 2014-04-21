@@ -1,4 +1,3 @@
-
 max.motifs <- Inf
 hit.p.cutoff <- 1e-4
 distance.cutoff <- Inf ##0.99
@@ -42,13 +41,10 @@ get.b.numbers <- function( gene.names ) {
     gene.lookup
 }
 
-##mot.networks <- list()
-##for ( f1 in 1:length(rdatas) ) {
-mot.networks <- mclapply( 1:length(rdatas), function(f1) {
-    f1 <- basename(rdatas[f1])
+get.motif.network <- function(f1, force=F) {
     print(f1)
     f1a <- gsub( '.RData', '', f1 )
-    if ( file.exists( sprintf('%s/%s_motifs_vsRegDB.RData', output.dir, f1a) ) ) { ## already done
+    if ( ! force && file.exists( sprintf('%s/%s_motifs_vsRegDB.RData', output.dir, f1a) ) ) { ## already done
         load( sprintf('%s/%s_motifs_vsRegDB.RData', output.dir, f1a) )
         return( network )
     } 
@@ -110,6 +106,13 @@ mot.networks <- mclapply( 1:length(rdatas), function(f1) {
     save( network, aupr, file=sprintf('%s/%s_motifs_vsRegDB.RData', output.dir, f1a) )
     ##mot.networks[[ f1 ]] <- network
     network
+}    
+
+##mot.networks <- list()
+##for ( f1 in 1:length(rdatas) ) {
+mot.networks <- mclapply( 1:length(rdatas), function(f1) {
+    f1 <- basename(rdatas[f1])
+    get.motif.network( f1 )
 }, mc.preschedule=F )
 names( mot.networks ) <- rdatas
 
@@ -130,6 +133,7 @@ pdf( 'motif_cumulative.pdf' )
 big.net <- mot.networks[[1]]
 summ.stats <- data.table()
 for ( i in 2:length(mot.networks) ) {
+    if ( is.null(mot.networks[[i]]) ) next
     aupr <- get.aupr( big.net, gold, plot=T, weight.cut=1e-5 )
     cat( names(mot.networks)[i], nrow(big.net), attr(aupr, 'AUC'), attr(aupr,'npred_at_prec25'), "\n" )
     summ.stats <- rbind( summ.stats, data.table( file=names(mot.networks)[i], nr=nrow(big.net),
@@ -149,6 +153,7 @@ summ.stats2 <- mclapply( 1:30, function(rnd) {
     big.net <- mot.networks[[ord[1]]]
     summ.stats <- data.table()
     for ( i in 2:length(mot.networks) ) {
+        if ( is.null(mot.networks[[ord[i]]]) ) next
         aupr <- get.aupr( big.net, gold, plot=F, weight.cut=1e-5 )
         cat( rnd, i, names(mot.networks)[ord[i]], nrow(big.net), attr(aupr, 'AUC'),
             attr(aupr,'npred_at_prec25'), "\n" )

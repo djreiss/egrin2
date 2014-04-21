@@ -7,9 +7,10 @@ require( data.table )
 ## integrating all RData files (from different cMonkey runs) into a single big cMonkey run...
 
 if ( ! exists( 'tasks' ) )
-    tasks <- c( 'fimo', 'coding.fracs', 'motif.shadows', 'motif.sims', 'newmotcluster',
+    tasks <- c( 'fimo', 'coding.fracs', 'motif.shadows',
                'regdb', 'regdb.aupr',  ## compares MOTIFS to regdb; compute auprs
                'nwinf', 'nwinf.regdb',  ## run nwInf; compares Inf. to regdb; compute auprs
+               'motif.sims', 'newmotcluster',
                'corems', 'tomtom' )
 if ( ! exists( 'output.dir' ) ) output.dir <- 'output/'
 

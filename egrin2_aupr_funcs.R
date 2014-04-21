@@ -8,8 +8,8 @@
 ## Only uses Inf. predictions that have abs(weight) >= 0.1 ... see ../FINAL_compare_regulondb.R
 get.aupr <- function( net, gold, weight.cut=0.1, plot.it=T, ... ) {
     net <- net[ rev( rank( abs(net$weight), ties='random' ) ), ]
-    net <- net[ abs(weight) >= weight.cut, ]
     if ( nrow( net ) > 100000 ) net <- net[ 1:100000, ]
+    net <- net[ abs(weight) >= weight.cut, ]
 
     netwo = paste( as.character(net$tf), as.character(net$target), sep='//' ) 
     regulator = as.character(net$tf)
@@ -85,3 +85,4 @@ gold$tf <- gene.lookup.fin[ as.character( gold$V1 ) ]
 gold$target <- gene.lookup.fin[ as.character( gold$V2 ) ]
 gold <- subset( gold, ! is.na( tf ) & ! is.na( target ) ) ## only removes 2 edges
 require(caTools) ## for trapz
+
