@@ -858,15 +858,15 @@ if ( FALSE ) {
 ## merge all prediction sets into a single weighted network
 ## for fun, let's compute AUPR stats after we add each network
 pdf( 'motif_cumulative.pdf' )
-big.net <- mot.networks[[1]]
+big.net <- unique(mot.networks[[1]])
 summ.stats <- data.table()
 for ( i in 2:length(mot.networks) ) {
     aupr <- get.aupr( big.net, gold, plot=T, weight.cut=1e-5 )
     cat( names(mot.networks)[i], nrow(big.net), attr(aupr, 'AUC'), attr(aupr,'npred_at_prec25'), "\n" )
     summ.stats <- rbind( summ.stats, data.table( file=names(mot.networks)[i], nr=nrow(big.net),
                                                 auc=attr(aupr, 'AUC'), npred=attr(aupr,'npred_at_prec25') ) )
-    tmp <- try( combine.networks( big.net, mot.networks[[i]] ) )
-    if ( ! 'try-error' %in% class(tmp) ) big.net <- tmp
+    tmp <- try( combine.networks( big.net, unique(mot.networks[[i]]) ) )
+    if ( ! 'try-error' %in% class(tmp) ) big.net <- unique(tmp)
 }
 plot( summ.stats$auc )
 dev.off()
@@ -874,7 +874,7 @@ dev.off()
 ## let's do it for 12 different randomized orderings of adding the networks
 summ.stats2 <- mclapply( 1:30, function(rnd) {
     ord <- sample( 1:length(mot.networks) )
-    big.net <- mot.networks[[ord[1]]]
+    big.net <- unique(mot.networks[[ord[1]]])
     summ.stats <- data.table()
     for ( i in 2:length(mot.networks) ) {
         aupr <- get.aupr( big.net, gold, plot=F, weight.cut=1e-5 )
@@ -882,8 +882,8 @@ summ.stats2 <- mclapply( 1:30, function(rnd) {
             attr(aupr,'npred_at_prec25'), "\n" )
         summ.stats <- rbind( summ.stats, data.table( file=names(mot.networks)[ord[i]], nr=nrow(big.net),
                                                 auc=attr(aupr, 'AUC'), npred=attr(aupr,'npred_at_prec25') ) )
-        tmp <- try( combine.networks( big.net, mot.networks[[ord[i]]] ) )
-        if ( ! 'try-error' %in% class(tmp) ) big.net <- tmp
+        tmp <- try( combine.networks( big.net, unique(mot.networks[[ord[i]]]) ) )
+         if ( ! 'try-error' %in% class(tmp) ) big.net <- unique(tmp)
     }
     summ.stats
 }, mc.preschedule=F )
