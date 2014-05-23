@@ -257,15 +257,15 @@ names(coding.fracs) <- rdatas
 ##   save as motif_shadows.RData
 
 if ( 'motif.shadows' %in% tasks ) {
-p.cutoff <- 1e-6
+p.cutoff <- 1e-4
     
-motif.shadows <- mclapply( 1:length(rdatas), function(f1) {
+mclapply( 1:length(rdatas), function(f1) {
     f1 <- rdatas[f1]
     cat('MOTIF SHADOWS', f1, '\n')
     f1a <- gsub( '.RData', '', f1 )
     if ( file.exists( sprintf('%s/%s_motif_shadows.RData', output.dir, f1a) ) ) {
         load( sprintf('%s/%s_motif_shadows.RData', output.dir, f1a) )
-        return( m )
+        return()
     }
     system( sprintf('touch %s/%s_motif_shadows.RData', output.dir, f1a) ) ## placeholder
     load( sprintf( '%s/%s', output.dir, f1 ) )
@@ -296,9 +296,7 @@ motif.shadows <- mclapply( 1:length(rdatas), function(f1) {
     } )
     names( m ) <- motifs
     save( m, file=sprintf('%s/%s_motif_shadows.RData', output.dir, f1a) )
-    m
 }, mc.preschedule=F )
-names( motif.shadows ) <- rdatas
 }
 
 ######################################################################
@@ -310,17 +308,28 @@ names( motif.shadows ) <- rdatas
 
 if ( 'motif.sims' %in% tasks ) {
 p.cutoff <- 1e-6
-    
-for ( f1 in rdatas ) { ##1:length(motif.shadows) ) {
-    if ( ! f1 %in% names( motif.shadows ) ) next
-    m1 <- motif.shadows[[f1]]
+
+apply.func <- lapply
+if ( ! ON.CLUSTER ) apply.func <- mclapply
+
+for ( f1 in rdatas ) {
     f1 <- gsub( '.RData', '', basename(f1) )
-    mclapply( rdatas2, function(f2) { ##i:length(motif.shadows), function(j) { ## allow self-self comparisons.
-        if ( ! f2 %in% names( motif.shadows ) ) return()
-        m2 <- motif.shadows[[f2]]
+    if ( file.exists( sprintf('%s/%s_motif_shadows.RData', output.dir, f1) ) ) {
+        load( sprintf('%s/%s_motif_shadows.RData', output.dir, f1) )
+        m1 <- m; rm( m )
+    } else {
+        next
+    }
+    apply.func( rdatas2, function(f2) { ## allow self-self comparisons.
         f2 <- gsub( '.RData', '', basename(f2) )
         print( sprintf('%s/%s_vs_%s_motif_sims.tsv.bz2', output.dir, f1, f2) )
         if ( file.exists( sprintf('%s/%s_vs_%s_motif_sims.tsv.bz2', output.dir, f1, f2) ) ) return()
+        if ( file.exists( sprintf('%s/%s_motif_shadows.RData', output.dir, f2) ) ) {
+            load( sprintf('%s/%s_motif_shadows.RData', output.dir, f2) )
+            m2 <- m; rm( m )
+        } else {
+            return()
+        }
         motif.sims <- data.frame()
         for ( ii in 1:length(m1) ) {
             m11 <- m1[[ii]]
@@ -347,11 +356,10 @@ for ( f1 in rdatas ) { ##1:length(motif.shadows) ) {
         write.table( motif.sims, file=sprintf('%s/%s_vs_%s_motif_sims.tsv', output.dir, f1, f2),
                     sep='\t', quote=F, row=F )
         system( sprintf('bzip2 -fv %s/%s_vs_%s_motif_sims.tsv', output.dir, f1, f2) )
-    }, mc.preschedule=F )
+        if ( ON.CLUSTER ) stop()
+    } ) ##, mc.preschedule=F )
 }
 }
-
-rm( motif.shadows ); gc()
 
 ######################################################################
 ######################################################################
@@ -961,12 +969,16 @@ for ( f1 in 1:length(rdatas) ) {
     mot.networks[[ f1 ]] <- network
 }
 
-for (f1 in names(mot.networks)) {
+##for (f1 in names(mot.networks)) {
+mot.auprs <- list()
+for ( f1 in 1:length(rdatas) ) {
+    f1 <- basename(rdatas[f1])
     network <- mot.networks[[f1]]
     if ( is.null( network ) ) next
     f1a <- gsub( '.RData', '', f1 )
     if ( file.exists( sprintf('%s/%s_motifs_vsRegDB.RData', output.dir, f1a) ) ) {
         load( sprintf('%s/%s_motifs_vsRegDB.RData', output.dir, f1a) )
+        mot.auprs[[f1]] <- attr(aupr, 'AUC')
     } else {
         aupr <- get.aupr( network, gold, plot=F, weight.cut=1e-5 )
         save( network, aupr, file=sprintf('%s/%s_motifs_vsRegDB.RData', output.dir, f1a) )
@@ -1017,7 +1029,14 @@ summ.stats3 <- sapply(summ.stats2,function(i)if(class(i)!='try-error') i[,auc] e
 if (is.list(summ.stats3)) summ.stats3 <- do.call(cbind, summ.stats3[ ! sapply(summ.stats3, is.null) ] )
 if ( do.plot ) {
     pdf( sprintf( '%s/motif_cumulative2.pdf', output.dir ) )
-    matplot( summ.stats3, typ='l', xlab='# cMonkey runs', ylab='AUPR' )
+    ##matplot( summ.stats3, typ='l', xlab='# cMonkey runs', ylab='AUPR' )
+
+    all.aucs <- unlist( mot.auprs )
+    matplot( summ.stats3, typ='l', xlab='# cMonkey runs', ylab='AUPR', main='EGRIN 2.0 GRE Performance',
+            xlim=c(0, 110), ylim=range(c(all.aucs,summ.stats3)) )
+    boxplot( all.aucs,add=T, at=108, boxwex=10 )
+    text( 104, mean(all.aucs), 'Indivual:', adj=c(1, 0.5) )
+    
     boxplot( t( summ.stats3 ), xlab='# cMonkey runs', ylab='AUPR' )
 
     ## Try this: how significant is the increase between a given iter and the last one (to see if
@@ -1082,7 +1101,7 @@ if ( 'nwinf.regdb.aupr' %in% tasks ) {
 ##if ( ! exists( 'all.rdata.clusterStacks' ) ) all.rdata.clusterStacks <- get.all.clusterStacks()
 
 ##for ( f1 in 1:length(rdatas) ) {
-coefs <- mclapply( 1:length(rdatas), function(f1) {
+coefs <- lapply( 1:length(rdatas), function(f1) {
     f1 <- basename(rdatas[f1])
     f1a <- gsub( '.RData', '', f1 )
     if ( ! file.exists( sprintf('%s/%s_nwInf_sm.RData', output.dir, f1a) ) ) return( list() )
@@ -1120,17 +1139,22 @@ names( coefs ) <- rdatas
 if ( TRUE ) {
 ## merge all prediction sets into a single weighted network
 ## for fun, let's compute AUPR stats after we add each network
+## TBD: add the beta, or abs(beta) ?? For paper, we did just beta...
 if ( ! exists( 'do.plot' ) ) do.plot <- FALSE
 if ( do.plot ) pdf( sprintf( '%s/nwInf_cumulative.pdf', output.dir ) )
 big.net <- unique(coefs[[1]]$coef)
+##big.net$weight <- abs(big.net$weight)
 aupr <- get.aupr( big.net, gold, plot=do.plot )
-summ.stats <- data.table()
+summ.stats <- data.table( file=names(coefs)[1], nr=nrow(big.net),
+                         auc=attr(aupr, 'AUC'), npred=attr(aupr,'nPredAt')[1] )
 for ( i in 2:length(coefs) ) {
     aupr <- get.aupr( big.net, gold, plot=do.plot )
     cat( names(coefs)[i], nrow(big.net), attr(aupr, 'AUC'), attr(aupr,'nPredAt')[1], "\n" )
     summ.stats <- rbind( summ.stats, data.table( file=names(coefs)[i], nr=nrow(big.net),
                                                 auc=attr(aupr, 'AUC'), npred=attr(aupr,'nPredAt')[1] ) )
-    tmp <- try( combine.networks( big.net, unique(coefs[[i]]$coef) ) )
+    net <- unique(coefs[[i]]$coef)
+    ##net$weight <- abs(net$weight)
+    tmp <- try( combine.networks( big.net, net ) )
     if ( ! 'try-error' %in% class(tmp) ) big.net <- unique(tmp)
 }
 if ( do.plot ) {
@@ -1155,14 +1179,18 @@ summ.stats2 <- mclapply( 1:12, function(rnd) {
     }
     summ.stats
 }, mc.preschedule=F )
-
+    
 summ.stats3 <- sapply(summ.stats2,function(i)if(class(i)!='try-error') i[,auc] else NULL)
 if (is.list(summ.stats3)) summ.stats3 <- do.call(cbind, summ.stats3[ ! sapply(summ.stats3, is.null) ] )
 ##summ.stats3 <- sapply(summ.stats2,function(i)i[,auc])
 if ( do.plot ) {
     pdf( sprintf( '%s/nwInf_cumulative2.pdf', output.dir ) )
-    matplot( summ.stats3, typ='l', xlab='# cMonkey runs', ylab='AUPR' )
-    boxplot( t( summ.stats3 ), xlab='# cMonkey runs', ylab='AUPR' )
+    all.aucs <- sapply( coefs, function(i) attr(i$aupr, 'AUC') )
+    matplot( summ.stats3, typ='l', xlab='# cMonkey runs', ylab='AUPR', main='EGRIN 2.0 Inferelator Performance',
+            xlim=c(0, 110), ylim=range(c(all.aucs,summ.stats3)) )
+    boxplot( all.aucs,add=T, at=108, boxwex=10 )
+    text( 104, mean(all.aucs), 'Indivual:', adj=c(1, 0.5) )
+    boxplot( t( summ.stats3 ), xlab='# cMonkey runs', ylab='Inferelator AUPR' )
     dev.off()
 }
 save( summ.stats, summ.stats2, summ.stats3, file=sprintf( '%s/nwInf_cumulative2.RData', output.dir ) )
@@ -1320,6 +1348,7 @@ for ( f1 in 1:length(rdatas) ) {
 stop()
 }
 
+if ( 'sqlite' %in% tasks ) {
 
 ## Write out all vital cMonkey info to a set of tsv's; then optionally convert them to a sqlite database file.
 cmonkey.run.to.sqlite <- function(e, fname, to.sqlite=F) {
@@ -1342,6 +1371,7 @@ cmonkey.run.to.sqlite <- function(e, fname, to.sqlite=F) {
       } else {
           if ( length(val) > 1 ) val <- paste(unlist(val),collapse=',')
       }
+      val <- gsub( '[\n\t]', '', val )
       tmp <- rbind( tmp, data.table( param=param, val=as.character(val) ) )
   }
   write.table( tmp, file=sprintf('%s/%s',fname,'params.tsv'), quote=F, sep='\t', row.names=F, col.names=T, append=F )
@@ -1433,7 +1463,7 @@ cmonkey.run.to.sqlite <- function(e, fname, to.sqlite=F) {
     mots <- e$meme.scores[[ 1 ]][[ k ]]$meme.out ##out$get.motifs(bicluster=bic)[[1]]
     pv <- e$meme.scores[[ 1 ]][[ k ]]$pv.ev[[2]]
     for ( mm in 1:length(mots) ) {
-      if ( k %% 100 == 0 ) print(mm)
+      if ( k %% 100 == 0 ) print(paste(k,mm))
       m <- mots[[ mm ]]
       minf <- m ##out$get.motif.info(m)[[1]]
       if ( ! is.null( minf ) ) {
@@ -1443,7 +1473,7 @@ cmonkey.run.to.sqlite <- function(e, fname, to.sqlite=F) {
         if ( ! is.null( tab ) ) write.table( tab, bzcon1, quote=F, sep='\t', row.names=F, col.names=!wrote, append=wrote )
         tab <- NULL; if ( nrow(minf$posns) > 0 ) tab <- as.data.table( cbind( bic=k, mot=mm, minf$posns ) )
         if ( ! is.null( tab ) ) write.table( tab, bzcon2, quote=F, sep='\t', row.names=F, col.names=!wrote, append=wrote )
-        tab <- NULL; if ( nrow(pv) > 0 ) {
+        tab <- NULL; if ( ! is.null(pv) && nrow(pv) > 0 ) {
             tmp <- subset( pv, abs(mots) == mm )
             if ( nrow(tmp) > 0 ) tab <- as.data.table( cbind( bic=k, mot=mm, tmp ) )
         }
@@ -1492,7 +1522,7 @@ cmonkey.run.to.sqlite <- function(e, fname, to.sqlite=F) {
       print(f)
       typematch <- c( integer='integer', character='character', numeric='real' )
       tf <- tempfile(); system(sprintf('bunzip2 -c %s | head -1000000 >%s', f, tf))
-      tmp <- fread(tf, nrows=1000000)
+      tmp <- fread(tf, nrows=1000000, sep='\t')
       print(head(tmp,5))
       classes <- sapply( tmp, class )
       if ( any( classes == 'character' ) ) {
@@ -1531,4 +1561,15 @@ cmonkey.run.to.sqlite <- function(e, fname, to.sqlite=F) {
   ##                             gsub('.tsv.bz2','',basename(files),fixed=T) ),
   ##                    collapse='' ) ) )
 }
+}
+
+for ( f1 in rdatas ) {
+    f1 <- gsub( '.RData', '', basename(f1) )
+    print(f1)
+    if ( file.exists( sprintf('%s/%s/cmonkey.db', output.dir, f1) ) ) next
+    load( sprintf( '%s/%s.RData', output.dir, f1 ) )
+    cmonkey.run.to.sqlite( e, sprintf('%s/%s', output.dir, f1), to.sqlite=T )
+    rm( e ); gc()
+}
+
 }
