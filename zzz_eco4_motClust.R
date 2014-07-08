@@ -195,7 +195,8 @@ if ( 'coding.fracs' %in% tasks ) {
 p.cutoff <- 1e-6
 
 ##for ( f1 in 1:length(rdatas) ) {
-coding.fracs <- mclapply( 1:length(rdatas), function(f1) {
+##coding.fracs <-
+mclapply( 1:length(rdatas), function(f1) {
     f1 <- rdatas[f1]
     cat('CODING FRACS', f1, '\n')
     f1a <- gsub( '.RData', '', basename(f1) )
@@ -206,10 +207,12 @@ coding.fracs <- mclapply( 1:length(rdatas), function(f1) {
     load( sprintf( '%s/%s', output.dir, f1 ) )
     fimo.out <- read.in.fimo( fimo.file, p.cutoff ) ##read.delim( bzfile(fimo.file) )
     
+    load( sprintf( '%s/%s', output.dir, f1 ) ) ## get e for genome seq
     coding.seqs <- lapply( names( e$genome.info$genome.seqs ), function( n )
                           rep( FALSE, nchar( e$genome.info$genome.seqs[ n ] ) ) )
     names( coding.seqs ) <- names( e$genome.info$genome.seqs )
     tmp <- subset( e$genome.info$feature.tab, type %in% c( 'CDS', 'rRNA', 'tRNA' ) )
+    rm( e, ratios )
     tmp$where <- as.character( tmp$contig )
     tmp$Start <- as.integer( as.character( tmp$start_pos ) )
     tmp$Stop <- as.integer( as.character( tmp$end_pos ) )
@@ -243,10 +246,10 @@ coding.fracs <- mclapply( 1:length(rdatas), function(f1) {
     mean.coding.frac <- sum( sapply( coding.seqs, sum, na.rm=T ) ) / sum( sapply( coding.seqs, length ) )
     coding.fracs <- list( all.fracs=frac.in.coding, mean.fracs=mean.coding.frac, p.cutoff=p.cutoff )
     save( coding.fracs, file=out.file )
-    coding.fracs
+    ##coding.fracs
 }, mc.preschedule=F )
-
-names(coding.fracs) <- rdatas
+##names(coding.fracs) <- rdatas
+rm(e)
 }    
 
 ######################################################################
@@ -314,17 +317,20 @@ if ( ! ON.CLUSTER ) apply.func <- mclapply
 
 for ( f1 in rdatas ) {
     f1 <- gsub( '.RData', '', basename(f1) )
+    print( f1 )
     if ( file.exists( sprintf('%s/%s_motif_shadows.RData', output.dir, f1) ) ) {
         load( sprintf('%s/%s_motif_shadows.RData', output.dir, f1) )
         m1 <- m; rm( m )
     } else {
         next
     }
+    ##if ( ON.CLUSTER ) Sys.sleep( sample(1:20, 1) )
     apply.func( rdatas2, function(f2) { ## allow self-self comparisons.
         f2 <- gsub( '.RData', '', basename(f2) )
-        print( sprintf('%s/%s_vs_%s_motif_sims.tsv.bz2', output.dir, f1, f2) )
         if ( file.exists( sprintf('%s/%s_vs_%s_motif_sims.tsv.bz2', output.dir, f1, f2) ) ) return()
+        if ( file.exists( sprintf('%s/%s_vs_%s_motif_sims.tsv.bz2', output.dir, f2, f1) ) ) return()
         if ( file.exists( sprintf('%s/%s_motif_shadows.RData', output.dir, f2) ) ) {
+            print( sprintf('%s/%s_vs_%s_motif_sims.tsv.bz2', output.dir, f1, f2) )
             load( sprintf('%s/%s_motif_shadows.RData', output.dir, f2) )
             m2 <- m; rm( m )
         } else {
@@ -356,7 +362,6 @@ for ( f1 in rdatas ) {
         write.table( motif.sims, file=sprintf('%s/%s_vs_%s_motif_sims.tsv', output.dir, f1, f2),
                     sep='\t', quote=F, row=F )
         system( sprintf('bzip2 -fv %s/%s_vs_%s_motif_sims.tsv', output.dir, f1, f2) )
-        if ( ON.CLUSTER ) stop()
     } ) ##, mc.preschedule=F )
 }
 }
@@ -396,7 +401,8 @@ for ( f in fs ) {
     ##system( sprintf( 'wc -l %s', mcltempfile ) )
 }
 
-if ( exclude.bad.mots && exists( 'coding.fracs' ) ) {
+## NEED TO UPDATE THIS TO READ IN CODING FRACS FROM RDATA FILE
+if ( exclude.bad.mots ) { ##&& exists( 'coding.fracs' ) ) {
     cfs <- do.call( rbind, lapply(names(coding.fracs), function(rd) {
         if ( is.null( coding.fracs[[rd]] ) ) return(NULL)
         tmp <- strsplit( gsub('.RData','',rd), '_' )[[ 1 ]]
@@ -693,8 +699,13 @@ regdb.out <- mclapply( 1:length(rdatas), function(f1) {
     return( combi.stats )
 }, mc.preschedule=F )
 names( regdb.out ) <- rdatas
-n.mots.hit <- as.integer( sapply(strsplit(sapply(regdb.out,'[',12),' '),'[',13) )
-hist( n.mots.hit, breaks=20 )
+
+if ( do.plot ) {
+    n.mots.hit <- as.integer( sapply(strsplit(sapply(regdb.out,'[',12),' '),'[',13) )
+    hist( n.mots.hit, breaks=20 )
+}
+
+rm(regdb.out); gc()
 }
 
 
@@ -986,7 +997,7 @@ for ( f1 in 1:length(rdatas) ) {
     cat( f1, nrow(network), attr(aupr, 'AUC'), attr(aupr,'nPredAt')[1], "\n" )
 }
 
-if ( TRUE ) {
+if ( ! ON.CLUSTER ) {
 ## merge all prediction sets into a single weighted network
 ## for fun, let's compute AUPR stats after we add each network
 if ( ! exists( 'do.plot' ) ) do.plot <- FALSE
@@ -1065,6 +1076,7 @@ if ( 'nwinf' %in% tasks ) {
 require( cMonkeyNwInf )
 load( 'format_data.RData' ) ## my formatted DREAM5 data -- get the TFs only
 rm( ratios, ratios.normed, names2, names1, names, gene.names, gene.lookup, gene.lookup2, gene.lookup.fin, names.syns )
+predictors <- tfs
 
 for ( f1 in 1:length(rdatas) ) {
     f1 <- basename(rdatas[f1])
@@ -1098,7 +1110,7 @@ for ( f1 in 1:length(rdatas) ) {
 
 if ( 'nwinf.regdb.aupr' %in% tasks ) {
 
-##if ( ! exists( 'all.rdata.clusterStacks' ) ) all.rdata.clusterStacks <- get.all.clusterStacks()
+if ( ! exists( 'all.rdata.clusterStacks' ) ) get.all.clusterStacks(); gc()
 
 ##for ( f1 in 1:length(rdatas) ) {
 coefs <- lapply( 1:length(rdatas), function(f1) {
@@ -1133,10 +1145,10 @@ coefs <- lapply( 1:length(rdatas), function(f1) {
     save( coef, aupr, file=sprintf('%s/%s_nwInf_sm_vsRegDB.RData', output.dir, f1a) )
     cat( f1, nrow(coef), attr(aupr, 'AUC'), attr(aupr,'nPredAt')[1], "\n" )
     return( list( coef=coef, aupr=aupr ) )
-}, mc.preschedule=F )
+} ) ##, mc.preschedule=F )
 names( coefs ) <- rdatas 
 
-if ( TRUE ) {
+if ( ! ON.CLUSTER ) {
 ## merge all prediction sets into a single weighted network
 ## for fun, let's compute AUPR stats after we add each network
 ## TBD: add the beta, or abs(beta) ?? For paper, we did just beta...
@@ -1310,6 +1322,7 @@ for ( f1 in 1:length(rdatas) ) {
             print( sprintf('SKIPPING: %s', fname) ); return() } ## already did this comparison
         if ( file.exists( sprintf('%s/%s_vs_%s_tomtom.tsv.bz2', output.dir, f2a, f1a) ) ) {
             print( sprintf('SKIPPING (REVERSED): %s', fname) ); return() } ## symmetric -- already did this comparison
+        if ( ON.CLUSTER ) system( sprintf('touch %s.bz2', fname) )
         load( sprintf( '%s/%s', output.dir, f2 ) )
         e2 <- e; rm( e )
         ##sys.source( "~/scratch/biclust/cmonkey-motif-other.R", envir=e2 )
