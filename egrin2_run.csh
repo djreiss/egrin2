@@ -1,7 +1,7 @@
 #!/bin/csh -f
 
 #$ -m abe
-#$ -M dreiss@systemsbiology.org
+#$ -M dreiss.isb@gmail.com.org
 #$ -P Baliga
 #$ -cwd
 ##$ -l h_rt=10000:00:00
